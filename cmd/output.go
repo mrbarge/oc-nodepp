@@ -39,7 +39,7 @@ var tableHeader = tableRow{
 func (o *outputter) Print() {
 	t := table.NewWriter()
 	t.SetStyle(table.StyleColoredDark)
-	rowConfigAutoMerge := table.RowConfig{AutoMerge: true}
+	rowConfigAutoMerge := table.RowConfig{AutoMerge: false}
 	t.AppendHeader(o.makeHeaderRow(), rowConfigAutoMerge)
 	t.AppendFooter(table.Row{
 		"",

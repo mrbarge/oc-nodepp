@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"io"
+	"nodepp/internal/config"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -35,6 +36,11 @@ resources to help attain a quick at-a-glance view of the cluster's state.
 	shortDescription = `
 Nodes, plus a little more more.
 `
+)
+
+var (
+	showUsage bool
+	showKeys  bool
 )
 
 type clusterData struct {
@@ -83,12 +89,14 @@ func NewNodePPCommand(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
+	ccmd.PersistentFlags().BoolVarP(&showUsage, config.ShowUsage, "u", true, "Show node resource usage")
+	ccmd.PersistentFlags().BoolVarP(&showKeys, config.ShowKeys, "k", true, "Show symbol keys")
+
 	fsets := ccmd.PersistentFlags()
 	cfgFlags := genericclioptions.NewConfigFlags(true)
 	cfgFlags.AddFlags(fsets)
 	matchVersionFlags := cmdutil.NewMatchVersionFlags(cfgFlags)
 	matchVersionFlags.AddFlags(fsets)
-
 	dpcmd.f = cmdutil.NewFactory(matchVersionFlags)
 
 	return ccmd
@@ -160,30 +168,35 @@ func (dp *nodePPCommand) run(args []string) error {
 	}
 
 	// Process node metrics
-	nodeMetrics, err := dp.getNodeMetrics()
-	if err != nil {
-		return err
-	}
-	for _, nm := range nodeMetrics.Items {
-		// ignore nodes we never pulled info for originally
-		if _, ok := cd.nodes[nm.Name]; !ok {
-			continue
+	if showUsage {
+		nodeMetrics, err := dp.getNodeMetrics()
+		if err != nil {
+			return err
 		}
-		if cd.nodes[nm.Name].cpu != nil {
-			cd.nodes[nm.Name].cpu.utilization = nm.Usage.Cpu().DeepCopy()
-		}
-		if cd.nodes[nm.Name].memory != nil {
-			cd.nodes[nm.Name].memory.utilization = nm.Usage.Memory().DeepCopy()
+		for _, nm := range nodeMetrics.Items {
+			// ignore nodes we never pulled info for originally
+			if _, ok := cd.nodes[nm.Name]; !ok {
+				continue
+			}
+			if cd.nodes[nm.Name].cpu != nil {
+				cd.nodes[nm.Name].cpu.utilization = nm.Usage.Cpu().DeepCopy()
+			}
+			if cd.nodes[nm.Name].memory != nil {
+				cd.nodes[nm.Name].memory.utilization = nm.Usage.Memory().DeepCopy()
+			}
 		}
 	}
 
 	// Render output
 	o := outputter{
-		showUsage: true,
+		showUsage: showUsage,
 		nm:        cd,
 	}
 	o.Print()
-	o.PrintKeys()
+	if showKeys {
+		o.PrintKeys()
+	}
+
 	return nil
 }
 
