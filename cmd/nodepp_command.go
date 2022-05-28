@@ -66,7 +66,7 @@ func NewNodePPCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	ccmd.PersistentFlags().BoolVarP(&showUsage, config.ShowUsage, "u", true, "Show node resource usage")
-	ccmd.PersistentFlags().BoolVarP(&showKeys, config.ShowKeys, "k", true, "Show symbol keys")
+	ccmd.PersistentFlags().BoolVarP(&showKeys, config.ShowKeys, "k", false, "Show symbol keys")
 
 	fsets := ccmd.PersistentFlags()
 	cfgFlags := genericclioptions.NewConfigFlags(true)

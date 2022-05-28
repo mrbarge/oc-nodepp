@@ -126,6 +126,12 @@ func (o *Outputter) makeRows(n *structs.NodeData) []table.Row {
 	case "Provisioning":
 		status += fmt.Sprintf("%c", consts.EMOJI_UPARROW)
 	}
+	if n.MemoryPressure {
+		status += fmt.Sprintf("%c", consts.EMOJI_EXPLODE)
+	}
+	if n.DiskPressure {
+		status += fmt.Sprintf("%c", consts.EMOJI_DISK)
+	}
 	row = append(row, status)
 
 	// Usage
@@ -193,9 +199,10 @@ func makeRoleValue(roles []string) string {
 }
 
 func (o *Outputter) PrintKeys() {
-	fmt.Printf("%c  Master Node\t%c  Infra Node\t%c  Worker Node\t%c  Missing Node\n",
-		consts.EMOJI_BUILDING, consts.EMOJI_BRICK, consts.EMOJI_WORKER, consts.EMOJI_QUESTION)
-	fmt.Printf("%c  Not Ready\t%c  Cordoned\t%c  Updating\t%c  Failed\t%c  Deleting\t%c  Provisioning\t%c  Resource is hot\n\n",
-		consts.EMOJI_SIREN, consts.EMOJI_ROADBLOCK, consts.EMOJI_WRENCH,
-		consts.EMOJI_CROSS, consts.EMOJI_WASTE, consts.EMOJI_UPARROW, consts.EMOJI_FIRE)
+	fmt.Printf("%c  Master Node\t\t%c  Infra Node\t\t%c  Worker Node\t\t%c  Missing Node\t%c  Not Ready\n",
+		consts.EMOJI_BUILDING, consts.EMOJI_BRICK, consts.EMOJI_WORKER, consts.EMOJI_QUESTION, consts.EMOJI_SIREN)
+	fmt.Printf("%c  Cordoned\t\t%c  Updating\t\t%c  Failed\t\t%c  Deleting\t\t%c  Provisioning\n",
+		consts.EMOJI_ROADBLOCK, consts.EMOJI_WRENCH, consts.EMOJI_CROSS, consts.EMOJI_WASTE, consts.EMOJI_UPARROW)
+	fmt.Printf("%c  Disk Pressure\t%c  Memory Pressure\t%c  Resource is hot\n\n",
+		consts.EMOJI_DISK, consts.EMOJI_EXPLODE, consts.EMOJI_FIRE)
 }

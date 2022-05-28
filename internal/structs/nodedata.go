@@ -8,17 +8,19 @@ import (
 )
 
 type NodeData struct {
-	NodeName     string
-	MachineName  string
-	MachinePhase string
-	InternalIP   string
-	Roles        []string
-	Updating     bool
-	Missing      bool
-	Cordoned     bool
-	Ready        bool
-	Cpu          *ResourceMetric
-	Memory       *ResourceMetric
+	NodeName       string
+	MachineName    string
+	MachinePhase   string
+	InternalIP     string
+	Roles          []string
+	Updating       bool
+	Missing        bool
+	Cordoned       bool
+	Ready          bool
+	MemoryPressure bool
+	DiskPressure   bool
+	Cpu            *ResourceMetric
+	Memory         *ResourceMetric
 }
 
 func (n *NodeData) NumRows() int {
@@ -62,6 +64,12 @@ func NewFromNode(node *v1.Node) (*NodeData, error) {
 	for _, c := range node.Status.Conditions {
 		if c.Type == v1.NodeReady && c.Status == v1.ConditionTrue {
 			nodeData.Ready = true
+		}
+		if c.Type == v1.NodeMemoryPressure && c.Status == v1.ConditionTrue {
+			nodeData.MemoryPressure = true
+		}
+		if c.Type == v1.NodeDiskPressure && c.Status == v1.ConditionTrue {
+			nodeData.DiskPressure = true
 		}
 	}
 	nodeData.Cpu = &ResourceMetric{
