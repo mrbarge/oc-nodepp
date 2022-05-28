@@ -1,17 +1,18 @@
-package cmd
+package outputter
 
 import (
 	"fmt"
 	"io"
+	"nodepp/internal/structs"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 
 	"nodepp/internal/consts"
 )
 
-type outputter struct {
-	showUsage bool
-	nm        *clusterData
+type Outputter struct {
+	ShowUsage   bool
+	NodeMetrics *structs.ClusterData
 }
 
 type tableRow struct {
@@ -36,7 +37,7 @@ var tableHeader = tableRow{
 	memory:      "MEMORY",
 }
 
-func (o *outputter) Print() {
+func (o *Outputter) Print() {
 	t := table.NewWriter()
 	t.SetStyle(table.StyleColoredDark)
 	rowConfigAutoMerge := table.RowConfig{AutoMerge: false}
@@ -44,7 +45,8 @@ func (o *outputter) Print() {
 	t.AppendFooter(table.Row{
 		"",
 	})
-	for _, node := range o.nm.nodes {
+	o.NodeMetrics.SortByRole()
+	for _, node := range o.NodeMetrics.Nodes {
 		rows := o.makeRows(node)
 		for _, r := range rows {
 			t.AppendRow(r, rowConfigAutoMerge)
@@ -53,10 +55,10 @@ func (o *outputter) Print() {
 	fmt.Println(t.Render())
 }
 
-func (o *outputter) PrintRow(w io.Writer) {
+func (o *Outputter) PrintRow(w io.Writer) {
 }
 
-func (o *outputter) makeHeaderRow() table.Row {
+func (o *Outputter) makeHeaderRow() table.Row {
 	r := table.Row{
 		tableHeader.ready,
 		tableHeader.nodeName,
@@ -65,56 +67,56 @@ func (o *outputter) makeHeaderRow() table.Row {
 		tableHeader.nodeRole,
 		tableHeader.status,
 	}
-	if o.showUsage {
+	if o.ShowUsage {
 		r = append(r, tableHeader.cpu, tableHeader.memory)
 	}
 	return r
 }
 
-func (o *outputter) makeRows(n *nodeData) []table.Row {
+func (o *Outputter) makeRows(n *structs.NodeData) []table.Row {
 
-	numRows := n.numRows()
+	numRows := n.NumRows()
 	fields := make([]table.Row, numRows)
 
 	// First row
 	var row table.Row
 
 	// Ready
-	if !n.ready {
+	if !n.Ready {
 		row = append(row, fmt.Sprintf("%c", consts.EMOJI_SIREN))
 	} else {
 		row = append(row, "")
 	}
 
 	// Node name
-	if n.nodeName == "" {
+	if n.NodeName == "" {
 		row = append(row, fmt.Sprintf("%c", consts.EMOJI_QUESTION))
 	} else {
-		row = append(row, n.nodeName)
+		row = append(row, n.NodeName)
 	}
 
 	// Machine name
-	row = append(row, n.machineName)
+	row = append(row, n.MachineName)
 
 	// IP
-	row = append(row, n.internalIP)
+	row = append(row, n.InternalIP)
 
 	// Role
-	if len(n.roles) > 0 {
-		row = append(row, makeRoleValue(n.roles))
+	if len(n.Roles) > 0 {
+		row = append(row, makeRoleValue(n.Roles))
 	} else {
 		row = append(row, "")
 	}
 
 	// Status
 	var status string
-	if n.updating {
+	if n.Updating {
 		status += fmt.Sprintf("%c", consts.EMOJI_WRENCH)
 	}
-	if n.cordoned {
+	if n.Cordoned {
 		status += fmt.Sprintf("%c", consts.EMOJI_ROADBLOCK)
 	}
-	switch n.machinePhase {
+	switch n.MachinePhase {
 	case "Failed":
 		status += fmt.Sprintf("%c", consts.EMOJI_CROSS)
 	case "Deleting":
@@ -127,11 +129,11 @@ func (o *outputter) makeRows(n *nodeData) []table.Row {
 	row = append(row, status)
 
 	// Usage
-	if o.showUsage {
+	if o.ShowUsage {
 		// Show utilization and allocatable in first row
-		if n.cpu != nil {
-			utilFraction := float64(n.cpu.utilization.MilliValue()) / float64(n.cpu.allocatable.MilliValue()) * 100
-			cpuval := fmt.Sprintf("%vm (%d%%)", n.cpu.utilization.MilliValue(), int64(utilFraction))
+		if n.Cpu != nil {
+			utilFraction := float64(n.Cpu.Utilization.MilliValue()) / float64(n.Cpu.Allocatable.MilliValue()) * 100
+			cpuval := fmt.Sprintf("%vm (%d%%)", n.Cpu.Utilization.MilliValue(), int64(utilFraction))
 			if utilFraction > 90 {
 				cpuval += string(consts.EMOJI_FIRE)
 			}
@@ -139,9 +141,9 @@ func (o *outputter) makeRows(n *nodeData) []table.Row {
 		} else {
 			row = append(row, "")
 		}
-		if n.memory != nil {
-			utilFraction := float64(n.memory.utilization.MilliValue()) / float64(n.memory.allocatable.MilliValue()) * 100
-			memval := fmt.Sprintf("%vMi (%d%%)", n.memory.utilization.Value()/(1024*1024), int64(utilFraction))
+		if n.Memory != nil {
+			utilFraction := float64(n.Memory.Utilization.MilliValue()) / float64(n.Memory.Allocatable.MilliValue()) * 100
+			memval := fmt.Sprintf("%vMi (%d%%)", n.Memory.Utilization.Value()/(1024*1024), int64(utilFraction))
 			if utilFraction > 90 {
 				memval += string(consts.EMOJI_FIRE)
 			}
@@ -153,12 +155,6 @@ func (o *outputter) makeRows(n *nodeData) []table.Row {
 	fields = append(fields, row)
 
 	return fields
-}
-
-func (n *nodeData) numRows() int {
-	// we don't have a need to extend a single node to multiple rows yet
-	maxRows := 1
-	return maxRows
 }
 
 func makeRoleValue(roles []string) string {
@@ -196,7 +192,7 @@ func makeRoleValue(roles []string) string {
 	return roles[0]
 }
 
-func (o *outputter) PrintKeys() {
+func (o *Outputter) PrintKeys() {
 	fmt.Printf("%c  Master Node\t%c  Infra Node\t%c  Worker Node\t%c  Missing Node\n",
 		consts.EMOJI_BUILDING, consts.EMOJI_BRICK, consts.EMOJI_WORKER, consts.EMOJI_QUESTION)
 	fmt.Printf("%c  Not Ready\t%c  Cordoned\t%c  Updating\t%c  Failed\t%c  Deleting\t%c  Provisioning\t%c  Resource is hot\n\n",

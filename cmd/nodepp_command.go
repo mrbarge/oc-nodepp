@@ -2,14 +2,11 @@ package cmd
 
 import (
 	"context"
-	"io"
-	"nodepp/internal/config"
-	"strings"
-
 	"github.com/spf13/cobra"
+	"io"
+	"nodepp/internal/structs"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
@@ -22,7 +19,9 @@ import (
 	"github.com/openshift/api/machine/v1beta1"
 	machinev1 "github.com/openshift/client-go/machine/clientset/versioned/typed/machine/v1beta1"
 
+	"nodepp/internal/config"
 	"nodepp/internal/consts"
+	"nodepp/internal/outputter"
 )
 
 const (
@@ -42,29 +41,6 @@ var (
 	showUsage bool
 	showKeys  bool
 )
-
-type clusterData struct {
-	nodes map[string]*nodeData
-}
-
-type resourceMetric struct {
-	allocatable resource.Quantity
-	utilization resource.Quantity
-}
-
-type nodeData struct {
-	nodeName     string
-	machineName  string
-	machinePhase string
-	internalIP   string
-	roles        []string
-	updating     bool
-	missing      bool
-	cordoned     bool
-	ready        bool
-	cpu          *resourceMetric
-	memory       *resourceMetric
-}
 
 type nodePPCommand struct {
 	out        io.Writer
@@ -116,8 +92,8 @@ func (dp *nodePPCommand) run(args []string) error {
 	dp.restConfig = rc
 
 	// Initialise data store
-	cd := new(clusterData)
-	cd.nodes = make(map[string]*nodeData, 0)
+	cd := new(structs.ClusterData)
+	cd.Nodes = make([]*structs.NodeData, 0)
 
 	// Pull node info
 	nodesToProcess := make([]v1.Node, 0)
@@ -140,11 +116,11 @@ func (dp *nodePPCommand) run(args []string) error {
 
 	// Process each node
 	for _, node := range nodesToProcess {
-		nodeData, err := dp.processNode(&node)
+		nodeData, err := structs.NewFromNode(&node)
 		if err != nil {
 			return err
 		}
-		cd.nodes[nodeData.nodeName] = nodeData
+		cd.Nodes = append(cd.Nodes, nodeData)
 	}
 
 	// Process machines
@@ -153,16 +129,17 @@ func (dp *nodePPCommand) run(args []string) error {
 		return err
 	}
 	for _, machine := range machines.Items {
-		nodeData, err := dp.processMachine(&machine)
+		nodeData, err := structs.NewFromMachine(&machine)
 		if err != nil {
 			return err
 		}
-		if nodeData.nodeName == "" {
-			cd.nodes[nodeData.machineName] = nodeData
+		if nodeData.NodeName == "" {
+			cd.Nodes = append(cd.Nodes, nodeData)
 		} else {
 			// just merge in machine info, if we pulled node info originally
-			if _, ok := cd.nodes[nodeData.nodeName]; ok {
-				cd.nodes[nodeData.nodeName].machinePhase = nodeData.machinePhase
+			node := cd.GetNode(nodeData.NodeName)
+			if node != nil {
+				node.MachinePhase = nodeData.MachinePhase
 			}
 		}
 	}
@@ -175,22 +152,23 @@ func (dp *nodePPCommand) run(args []string) error {
 		}
 		for _, nm := range nodeMetrics.Items {
 			// ignore nodes we never pulled info for originally
-			if _, ok := cd.nodes[nm.Name]; !ok {
+			node := cd.GetNode(nm.Name)
+			if node != nil {
 				continue
 			}
-			if cd.nodes[nm.Name].cpu != nil {
-				cd.nodes[nm.Name].cpu.utilization = nm.Usage.Cpu().DeepCopy()
+			if node.Cpu != nil {
+				node.Cpu.Utilization = nm.Usage.Cpu().DeepCopy()
 			}
-			if cd.nodes[nm.Name].memory != nil {
-				cd.nodes[nm.Name].memory.utilization = nm.Usage.Memory().DeepCopy()
+			if node.Memory != nil {
+				node.Memory.Utilization = nm.Usage.Memory().DeepCopy()
 			}
 		}
 	}
 
 	// Render output
-	o := outputter{
-		showUsage: showUsage,
-		nm:        cd,
+	o := outputter.Outputter{
+		ShowUsage:   showUsage,
+		NodeMetrics: cd,
 	}
 	o.Print()
 	if showKeys {
@@ -198,73 +176,6 @@ func (dp *nodePPCommand) run(args []string) error {
 	}
 
 	return nil
-}
-
-func (dp *nodePPCommand) processNode(node *v1.Node) (*nodeData, error) {
-
-	nodeData := new(nodeData)
-	nodeData.nodeName = node.Name
-
-	for _, addr := range node.Status.Addresses {
-		if addr.Type == v1.NodeInternalIP {
-			nodeData.internalIP = addr.Address
-			break
-		}
-	}
-
-	annotations := node.GetAnnotations()
-	if machine, ok := annotations[consts.Annotation_Machine]; ok {
-		machineName := strings.SplitAfter(machine, "/")[1]
-		nodeData.machineName = machineName
-		//dp.getMachine(machineName)
-	}
-	nodeData.cordoned = node.Spec.Unschedulable
-	if currentConfig, ok := annotations[consts.Annotation_MachineCurrentConfig]; ok {
-		if desiredConfig, ok := annotations[consts.Annotation_MachineDesiredConfig]; ok {
-			if currentConfig != desiredConfig {
-				nodeData.updating = true
-			}
-		}
-	}
-	nodeData.roles = make([]string, 0)
-	labels := node.GetLabels()
-	for _, l := range []string{consts.Label_MasterNodeRole, consts.Label_InfraNodeRole, consts.Label_WorkerNodeRole} {
-		if _, ok := labels[l]; ok {
-			nodeData.roles = append(nodeData.roles, strings.SplitAfter(l, "/")[1])
-		}
-	}
-	for _, c := range node.Status.Conditions {
-		if c.Type == v1.NodeReady && c.Status == v1.ConditionTrue {
-			nodeData.ready = true
-		}
-	}
-	nodeData.cpu = &resourceMetric{
-		allocatable: node.Status.Allocatable.Cpu().DeepCopy(),
-	}
-	nodeData.memory = &resourceMetric{
-		allocatable: node.Status.Allocatable.Memory().DeepCopy(),
-	}
-
-	return nodeData, nil
-}
-
-func (dp *nodePPCommand) processMachine(machine *v1beta1.Machine) (*nodeData, error) {
-
-	nodeData := new(nodeData)
-
-	// set the machine name
-	nodeData.machineName = machine.Name
-
-	// get the node name
-	if machine.Status.NodeRef != nil && machine.Status.NodeRef.Kind == "Node" {
-		nodeData.nodeName = machine.Status.NodeRef.Name
-	}
-
-	// set the machine phase
-	nodeData.machinePhase = *machine.Status.Phase
-
-	// that's all we care about for now
-	return nodeData, nil
 }
 
 func (dp *nodePPCommand) getMachine(name string) error {
