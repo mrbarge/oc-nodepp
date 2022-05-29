@@ -153,7 +153,7 @@ func (dp *nodePPCommand) run(args []string) error {
 		for _, nm := range nodeMetrics.Items {
 			// ignore nodes we never pulled info for originally
 			node := cd.GetNode(nm.Name)
-			if node != nil {
+			if node == nil {
 				continue
 			}
 			if node.Cpu != nil {
