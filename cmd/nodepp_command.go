@@ -16,7 +16,9 @@ import (
 	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	mcs "k8s.io/metrics/pkg/client/clientset/versioned"
 
+	oapi "github.com/openshift/api/config/v1"
 	"github.com/openshift/api/machine/v1beta1"
+	configclient "github.com/openshift/client-go/config/clientset/versioned"
 	machinev1 "github.com/openshift/client-go/machine/clientset/versioned/typed/machine/v1beta1"
 
 	"nodepp/internal/config"
@@ -38,8 +40,10 @@ Nodes, plus a little more more.
 )
 
 var (
-	showUsage bool
-	showKeys  bool
+	showUsage     bool
+	showKeys      bool
+	showVersion   bool
+	showOperators bool
 )
 
 type nodePPCommand struct {
@@ -66,6 +70,8 @@ func NewNodePPCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	ccmd.PersistentFlags().BoolVarP(&showUsage, config.ShowUsage, "u", true, "Show node resource usage")
+	ccmd.PersistentFlags().BoolVarP(&showVersion, config.ShowVersion, "v", true, "Show cluster version data")
+	ccmd.PersistentFlags().BoolVarP(&showOperators, config.ShowOperators, "o", true, "Show cluster operator data")
 	ccmd.PersistentFlags().BoolVarP(&showKeys, config.ShowKeys, "k", false, "Show symbol keys")
 
 	fsets := ccmd.PersistentFlags()
@@ -165,6 +171,24 @@ func (dp *nodePPCommand) run(args []string) error {
 		}
 	}
 
+	// Process cluster version
+	if showVersion {
+		cv, err := dp.getClusterVersion()
+		if err != nil {
+			return err
+		}
+		cd.Version = cv
+	}
+
+	// Process cluster operators
+	if showOperators {
+		co, err := dp.getClusterOperators()
+		if err != nil {
+			return err
+		}
+		cd.ClusterOperators = co
+	}
+
 	// Render output
 	o := outputter.Outputter{
 		ShowUsage:   showUsage,
@@ -203,4 +227,22 @@ func (dp *nodePPCommand) getNodeMetrics() (*metricsv1beta1.NodeMetricsList, erro
 		return nil, err
 	}
 	return nmList, nil
+}
+
+func (dp *nodePPCommand) getClusterVersion() (*oapi.ClusterVersion, error) {
+	cvClient, err := configclient.NewForConfig(dp.restConfig)
+	cv, err := cvClient.ConfigV1().ClusterVersions().Get(context.Background(), "version", metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return cv, nil
+}
+
+func (dp *nodePPCommand) getClusterOperators() (*oapi.ClusterOperatorList, error) {
+	cvClient, err := configclient.NewForConfig(dp.restConfig)
+	cos, err := cvClient.ConfigV1().ClusterOperators().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return cos, nil
 }

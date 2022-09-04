@@ -1,9 +1,14 @@
 package structs
 
-import "sort"
+import (
+	v1 "github.com/openshift/api/config/v1"
+	"sort"
+)
 
 type ClusterData struct {
-	Nodes []*NodeData
+	Nodes            []*NodeData
+	Version          *v1.ClusterVersion
+	ClusterOperators *v1.ClusterOperatorList
 }
 
 // GetNode returns a node with the given node name or machine name

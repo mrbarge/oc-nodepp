@@ -2,8 +2,11 @@ package outputter
 
 import (
 	"fmt"
+	"github.com/jedib0t/go-pretty/v6/text"
+	v1 "github.com/openshift/api/config/v1"
 	"io"
 	"nodepp/internal/structs"
+	"nodepp/internal/util"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 
@@ -21,6 +24,7 @@ type tableRow struct {
 	machineName string
 	internalIP  string
 	nodeRole    string
+	age         string
 	status      string
 	cpu         string
 	memory      string
@@ -32,27 +36,32 @@ var tableHeader = tableRow{
 	machineName: "MACHINE",
 	internalIP:  "INTERNAL IP",
 	nodeRole:    "ROLE",
+	age:         "AGE",
 	status:      "STATUS",
 	cpu:         "CPU",
 	memory:      "MEMORY",
 }
 
 func (o *Outputter) Print() {
-	t := table.NewWriter()
-	t.SetStyle(table.StyleColoredDark)
+	nodeTable := table.NewWriter()
+	nodeTable.SetStyle(table.StyleColoredDark)
+	nodeTable.Style().Color.Footer = text.Colors{text.FgHiYellow, text.BgHiBlack}
 	rowConfigAutoMerge := table.RowConfig{AutoMerge: false}
-	t.AppendHeader(o.makeHeaderRow(), rowConfigAutoMerge)
-	t.AppendFooter(table.Row{
-		"",
-	})
+
+	header := o.makeHeaderRow()
+	nodeTable.AppendHeader(header, rowConfigAutoMerge)
+
 	o.NodeMetrics.SortByRole()
 	for _, node := range o.NodeMetrics.Nodes {
 		rows := o.makeRows(node)
 		for _, r := range rows {
-			t.AppendRow(r, rowConfigAutoMerge)
+			nodeTable.AppendRow(r, rowConfigAutoMerge)
 		}
 	}
-	fmt.Println(t.Render())
+
+	fmt.Println(nodeTable.Render())
+	o.showVersion()
+	o.showClusterOperators()
 }
 
 func (o *Outputter) PrintRow(w io.Writer) {
@@ -65,12 +74,53 @@ func (o *Outputter) makeHeaderRow() table.Row {
 		tableHeader.machineName,
 		tableHeader.internalIP,
 		tableHeader.nodeRole,
+		tableHeader.age,
 		tableHeader.status,
 	}
 	if o.ShowUsage {
 		r = append(r, tableHeader.cpu, tableHeader.memory)
 	}
 	return r
+}
+
+func (o *Outputter) showVersion() {
+	if o.NodeMetrics.Version == nil {
+		return
+	}
+	vt := text.FgHiYellow.Sprintf(" %c Version: ", consts.EMOJI_GEAR)
+	current, err := util.GetCurrentVersion(o.NodeMetrics.Version)
+	if err == nil {
+		vt += text.FgYellow.Sprintf(current)
+		desired := o.NodeMetrics.Version.Spec.DesiredUpdate
+		if desired != nil {
+			vt += text.FgYellow.Sprintf("  %c  %s", consts.EMOJI_SOON, desired.Version)
+		}
+	}
+	fmt.Println(vt)
+}
+
+func (o *Outputter) showClusterOperators() {
+
+	if o.NodeMetrics.ClusterOperators == nil {
+		return
+	}
+
+	operatorReport := ""
+	for _, co := range o.NodeMetrics.ClusterOperators.Items {
+		for _, cnd := range co.Status.Conditions {
+			if cnd.Type == v1.OperatorAvailable && cnd.Status == v1.ConditionFalse {
+				operatorReport += text.FgYellow.Sprintf(" %c %s (down)\n", consts.EMOJI_SIREN, co.Name)
+				break
+			}
+			if cnd.Type == v1.OperatorDegraded && cnd.Status == v1.ConditionTrue {
+				operatorReport += text.FgYellow.Sprintf(" %c %s (degraded)\n", consts.EMOJI_WARN, co.Name)
+			}
+		}
+	}
+	if operatorReport != "" {
+		fmt.Println(text.FgHiYellow.Sprintf("Unhealthy Cluster Operators:"))
+		fmt.Println(operatorReport)
+	}
 }
 
 func (o *Outputter) makeRows(n *structs.NodeData) []table.Row {
@@ -107,6 +157,9 @@ func (o *Outputter) makeRows(n *structs.NodeData) []table.Row {
 	} else {
 		row = append(row, "")
 	}
+
+	// Age
+	row = append(row, n.Age)
 
 	// Status
 	var status string

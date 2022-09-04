@@ -1,10 +1,13 @@
 package structs
 
 import (
+	"strings"
+	"time"
+
 	"github.com/openshift/api/machine/v1beta1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/duration"
 	"nodepp/internal/consts"
-	"strings"
 )
 
 type NodeData struct {
@@ -12,6 +15,7 @@ type NodeData struct {
 	MachineName    string
 	MachinePhase   string
 	InternalIP     string
+	Age            string
 	Roles          []string
 	Updating       bool
 	Missing        bool
@@ -38,6 +42,12 @@ func NewFromNode(node *v1.Node) (*NodeData, error) {
 			nodeData.InternalIP = addr.Address
 			break
 		}
+	}
+
+	if node.CreationTimestamp.IsZero() {
+		nodeData.Age = "?"
+	} else {
+		nodeData.Age = duration.HumanDuration(time.Since(node.CreationTimestamp.Time))
 	}
 
 	annotations := node.GetAnnotations()
