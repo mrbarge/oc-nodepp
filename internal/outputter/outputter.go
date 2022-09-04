@@ -34,7 +34,6 @@ var tableHeader = tableRow{
 	ready:       " ",
 	nodeName:    "NODE",
 	machineName: "MACHINE",
-	internalIP:  "INTERNAL IP",
 	nodeRole:    "ROLE",
 	age:         "AGE",
 	status:      "STATUS",
@@ -58,6 +57,7 @@ func (o *Outputter) Print() {
 			nodeTable.AppendRow(r, rowConfigAutoMerge)
 		}
 	}
+	nodeTable.AppendFooter(table.Row{""})
 
 	fmt.Println(nodeTable.Render())
 	o.showVersion()
@@ -72,7 +72,6 @@ func (o *Outputter) makeHeaderRow() table.Row {
 		tableHeader.ready,
 		tableHeader.nodeName,
 		tableHeader.machineName,
-		tableHeader.internalIP,
 		tableHeader.nodeRole,
 		tableHeader.age,
 		tableHeader.status,
@@ -118,7 +117,7 @@ func (o *Outputter) showClusterOperators() {
 		}
 	}
 	if operatorReport != "" {
-		fmt.Println(text.FgHiYellow.Sprintf("Unhealthy Cluster Operators:"))
+		fmt.Println(text.FgHiYellow.Sprintf(" Unhealthy Cluster Operators:"))
 		fmt.Println(operatorReport)
 	}
 }
@@ -147,9 +146,6 @@ func (o *Outputter) makeRows(n *structs.NodeData) []table.Row {
 
 	// Machine name
 	row = append(row, n.MachineName)
-
-	// IP
-	row = append(row, n.InternalIP)
 
 	// Role
 	if len(n.Roles) > 0 {
