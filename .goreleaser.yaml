@@ -1,0 +1,53 @@
+# This is an example .goreleaser.yml file with some sensible defaults.
+# Make sure to check the documentation at https://goreleaser.com
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      # the following line will inject the current git tag in the binary during the build process.
+      # .Version are template variables that will be set during the GoReleaser run
+      # The "-X" go flag injects the strings into the two global variables GitCommit and Version
+      # See also: https://pkg.go.dev/cmd/link
+      - -s
+      - -w
+      - -X github.com/openshift/osdctl/pkg/utils.Version={{.Version}}
+      - "-extldflags=-zrelro" # binary hardening: For further explanation look here: https://www.redhat.com/en/blog/hardening-elf-binaries-using-relocation-read-only-relro
+      - "-extldflags=-znow"
+
+archives:
+  - format: tar.gz
+    # this name template makes the OS and Arch compatible with the results of uname.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+# The lines beneath this are called `modelines`. See `:help modeline`
+# Feel free to remove those if you don't want/use them.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
