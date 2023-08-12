@@ -44,6 +44,7 @@ var (
 	showKeys      bool
 	showVersion   bool
 	showOperators bool
+	nodeLabels    string
 )
 
 type nodePPCommand struct {
@@ -73,6 +74,7 @@ func NewNodePPCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	ccmd.PersistentFlags().BoolVarP(&showVersion, config.ShowVersion, "v", true, "Show cluster version data")
 	ccmd.PersistentFlags().BoolVarP(&showOperators, config.ShowOperators, "o", true, "Show cluster operator data")
 	ccmd.PersistentFlags().BoolVarP(&showKeys, config.ShowKeys, "k", false, "Show symbol keys")
+	ccmd.PersistentFlags().StringVarP(&nodeLabels, config.NodeLabels, "l", "", "Filter by node labels")
 
 	fsets := ccmd.PersistentFlags()
 	cfgFlags := genericclioptions.NewConfigFlags(true)
@@ -110,7 +112,9 @@ func (dp *nodePPCommand) run(args []string) error {
 		}
 		nodesToProcess = append(nodesToProcess, *node)
 	} else {
-		nodes, err := dp.clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+		nodes, err := dp.clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
+			LabelSelector: nodeLabels,
+		})
 		if err != nil {
 			return err
 		}
