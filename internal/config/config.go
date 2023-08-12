@@ -13,4 +13,7 @@ const (
 
 	// ShowOperators controls whether cluster operator data is displayed
 	ShowOperators string = "show-operators"
+
+	// NodeLabels controls filtering based on node labels
+	NodeLabels string = "node-labels"
 )
